@@ -1,0 +1,8 @@
+[package]
+name = "tatoeba-frequency"
+version = "0.1.0"
+authors = ["Tom Cumming <mail@tomcumming.co.uk>"]
+edition = "2018"
+
+[dependencies]
+unicode-normalization = "0.1.8"
