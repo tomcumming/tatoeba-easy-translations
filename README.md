@@ -5,8 +5,9 @@
     - Uses word frequency to calculate ease of sentence
     - Word frequency is calculated based on the sentences in tatoeba
     - A sentence is ranked as hard as its hardest word
-- Currently only able to parse languages where words are separated by white-space
-    - Work in progress for plug-able tokenizers to support Chinese, Japanese etc
+- Support all white-space word seperated languages
+- Supports chinese thanks to `jieba_rs`
+- Currently unsupported: Japanese, Thai, Lao...
 
 ## Requirements
 
@@ -18,6 +19,8 @@
 ```
 - To print all languages:
     tatoeba-frequency langs <sentences.csv path>
+- To print out word frequency for a language
+    tatoeba-frequency freq <lang> <sentences.csv path>
 - To create translations to stdout:
     tatoeba-frequency ease <lang from> <lang to> <sentences.csv path> <links.csv path>
 ```
