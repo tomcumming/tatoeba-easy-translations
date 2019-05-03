@@ -267,6 +267,13 @@ fn is_split_char(c: char) -> bool {
     !overrides.contains(&c) && (c.is_whitespace() || c.is_ascii_punctuation())
 }
 
+const USAGE: &str = "
+Usage:
+- To print all languages:
+    tatoeba-frequency langs <sentences.csv path>
+- To create translations to stdout:
+    tatoeba-frequency ease <lang from> <lang to> <sentences.csv path> <links.csv path>";
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match &args[..] {
@@ -276,6 +283,9 @@ fn main() {
                 line.split(is_split_char).collect()
             })
         }
-        _ => println!("TODO: usage information"),
+        _ => {
+            eprintln!("{}", USAGE);
+            std::process::exit(1);
+        }
     }
 }
