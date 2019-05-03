@@ -22,6 +22,14 @@
     tatoeba-frequency ease <lang from> <lang to> <sentences.csv path> <links.csv path>
 ```
 
+## Output format
+
+- Tab seperated file with the following columns
+    - Source sentence ID
+    - Translation ID
+    - Source sentence content
+    - Translation content
+
 ## Example French to English output
 
 Easy sentences at the top of the output file:
