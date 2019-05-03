@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 unicode-normalization = "0.1.8"
+jieba-rs = "0.2"

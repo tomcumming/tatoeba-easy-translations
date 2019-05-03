@@ -5,6 +5,33 @@ use std::collections::BTreeSet;
 use std::io::BufRead;
 use unicode_normalization::UnicodeNormalization;
 
+trait Tokenizer {
+    fn tokenize<'a, 'b>(&'b mut self, sentence: &'a str) -> Vec<&'a str>;
+}
+
+struct DefaultTokenizer;
+
+impl Tokenizer for DefaultTokenizer {
+    fn tokenize<'b, 'a>(&'b mut self, sentence: &'a str) -> Vec<&'a str> {
+        sentence.split(is_split_char).collect()
+    }
+}
+
+// For chinese
+struct JiebaTokenizer(jieba_rs::Jieba);
+
+impl JiebaTokenizer {
+    fn new() -> JiebaTokenizer {
+        JiebaTokenizer(jieba_rs::Jieba::new())
+    }
+}
+
+impl Tokenizer for JiebaTokenizer {
+    fn tokenize<'b, 'a>(&'b mut self, sentence: &'a str) -> Vec<&'a str> {
+        self.0.cut(sentence, true)
+    }
+}
+
 fn list_languages(path: &str) {
     let lines =
         std::io::BufReader::new(std::fs::File::open(path).expect("Could not open input file"))
@@ -25,17 +52,31 @@ fn list_languages(path: &str) {
     eprintln!("Found {} languages in {} sentences", seen.len(), count);
 }
 
-fn make_translations<F>(
+fn word_freqs(sentence_path: &str, lang: &str, tokenizer: &mut Tokenizer) {
+    eprintln!("Finding word frequencies for '{}'...", lang);
+    let word_frequencys = word_frequency(sentence_path, lang, tokenizer);
+
+    eprintln!("Sorting...");
+    let mut freqs = word_frequencys
+        .into_iter()
+        .map(|(word, freq)| (freq, word))
+        .collect::<Vec<(usize, String)>>();
+
+    freqs.sort_unstable_by_key(|(freq, _)| *freq);
+    for (freq, word) in freqs {
+        println!("{}\t{}", freq, word);
+    }
+}
+
+fn make_translations(
     sentence_path: &str,
     link_path: &str,
     lang_from: &str,
     lang_to: &str,
-    tokenize: F,
-) where
-    for<'a> F: Clone + FnMut(&'a str) -> Vec<&'a str>,
-{
+    tokenizer: &mut Tokenizer,
+) {
     eprintln!("Finding word frequencies for '{}'...", lang_from);
-    let word_frequencys = word_frequency(sentence_path, lang_from, tokenize.clone());
+    let word_frequencys = word_frequency(sentence_path, lang_from, tokenizer);
 
     eprintln!("Sorting and indexing words...");
     let word_to_freq: BTreeMap<String, usize> = {
@@ -57,7 +98,7 @@ fn make_translations<F>(
     };
 
     eprintln!("Ordering sentences by ease...");
-    let from_sentences = get_sentence_scores(sentence_path, lang_from, &word_to_freq, tokenize);
+    let from_sentences = get_sentence_scores(sentence_path, lang_from, &word_to_freq, tokenizer);
 
     eprintln!("Reading sentence links...");
     let links = parse_links(sentence_path, link_path, lang_from, lang_to);
@@ -175,15 +216,12 @@ fn parse_links(
     links
 }
 
-fn get_sentence_scores<F>(
+fn get_sentence_scores(
     sentence_path: &str,
     lang_from: &str,
     word_to_freq: &BTreeMap<String, usize>,
-    mut tokenize: F,
-) -> Vec<(usize, String, usize)>
-where
-    for<'a> F: Clone + FnMut(&'a str) -> Vec<&'a str>,
-{
+    tokenizer: &mut Tokenizer,
+) -> Vec<(usize, String, usize)> {
     let mut lines: Vec<(usize, String, usize)> = std::io::BufReader::new(
         std::fs::File::open(sentence_path).expect("Could not open input file"),
     )
@@ -193,7 +231,7 @@ where
         let mut iter = line.split('\t');
         if let (Some(id), Some(lang), Some(sentence)) = (iter.next(), iter.next(), iter.next()) {
             if lang == lang_from {
-                let scores = filtered_words(tokenize(sentence).into_iter())
+                let scores = filtered_words(tokenizer.tokenize(sentence).into_iter())
                     .into_iter()
                     .map(|word| word_to_freq.get(&word).cloned())
                     .collect::<Option<Vec<usize>>>();
@@ -220,10 +258,11 @@ where
     lines
 }
 
-fn word_frequency<F>(sentence_path: &str, lang: &str, mut tokenize: F) -> BTreeMap<String, usize>
-where
-    for<'a> F: FnMut(&'a str) -> Vec<&'a str>,
-{
+fn word_frequency(
+    sentence_path: &str,
+    lang: &str,
+    tokenizer: &mut Tokenizer,
+) -> BTreeMap<String, usize> {
     let lines = std::io::BufReader::new(
         std::fs::File::open(sentence_path).expect("Could not open input file"),
     )
@@ -236,7 +275,7 @@ where
 
         if cells.get(1) == Some(&lang) {
             if let Some(sentence) = cells.get(2) {
-                for word in filtered_words(tokenize(sentence).into_iter()) {
+                for word in filtered_words(tokenizer.tokenize(sentence).into_iter()) {
                     let count = seen.get(&word).unwrap_or(&0);
                     seen.insert(word, *count + 1);
                 }
@@ -262,15 +301,28 @@ fn filtered_words<'a>(tokens: impl Iterator<Item = &'a str>) -> Vec<String> {
 }
 
 fn is_split_char(c: char) -> bool {
-    let overrides = ['\''];
+    let ignores = ['\''];
+    let includes = [
+        '”', '“', '。', '，', '？', '…', '！', '、', '：',
+    ];
 
-    !overrides.contains(&c) && (c.is_whitespace() || c.is_ascii_punctuation())
+    !ignores.contains(&c)
+        && (includes.contains(&c) || c.is_whitespace() || c.is_ascii_punctuation())
+}
+
+fn choose_tokenizer(lang: &str) -> Box<dyn Tokenizer> {
+    match lang {
+        "cmn" => Box::new(JiebaTokenizer::new()),
+        _ => Box::new(DefaultTokenizer),
+    }
 }
 
 const USAGE: &str = "
 Usage:
 - To print all languages:
     tatoeba-frequency langs <sentences.csv path>
+- To print out word frequency for a language
+    tatoeba-frequency freq <lang> <sentences.csv path>
 - To create translations to stdout:
     tatoeba-frequency ease <lang from> <lang to> <sentences.csv path> <links.csv path>";
 
@@ -278,10 +330,13 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     match &args[..] {
         [_, cmd, path] if cmd == "langs" => list_languages(path),
+        [_, cmd, lang, path] if cmd == "freq" => {
+            let tokenizer = choose_tokenizer(lang);
+            word_freqs(path, lang, Box::leak(tokenizer))
+        }
         [_, cmd, from, to, sentence_path, link_path] if cmd == "ease" => {
-            make_translations(sentence_path, link_path, from, to, |line| {
-                line.split(is_split_char).collect()
-            })
+            let tokenizer = choose_tokenizer(from);
+            make_translations(sentence_path, link_path, from, to, Box::leak(tokenizer))
         }
         _ => {
             eprintln!("{}", USAGE);
