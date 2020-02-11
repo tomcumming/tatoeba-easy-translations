@@ -52,7 +52,7 @@ fn list_languages(path: &str) {
     eprintln!("Found {} languages in {} sentences", seen.len(), count);
 }
 
-fn word_freqs(sentence_path: &str, lang: &str, tokenizer: &mut Tokenizer) {
+fn word_freqs(sentence_path: &str, lang: &str, tokenizer: &mut dyn Tokenizer) {
     eprintln!("Finding word frequencies for '{}'...", lang);
     let word_frequencys = word_frequency(sentence_path, lang, tokenizer);
 
@@ -73,7 +73,7 @@ fn make_translations(
     link_path: &str,
     lang_from: &str,
     lang_to: &str,
-    tokenizer: &mut Tokenizer,
+    tokenizer: &mut dyn Tokenizer,
 ) {
     eprintln!("Finding word frequencies for '{}'...", lang_from);
     let word_frequencys = word_frequency(sentence_path, lang_from, tokenizer);
@@ -220,7 +220,7 @@ fn get_sentence_scores(
     sentence_path: &str,
     lang_from: &str,
     word_to_freq: &BTreeMap<String, usize>,
-    tokenizer: &mut Tokenizer,
+    tokenizer: &mut dyn Tokenizer,
 ) -> Vec<(usize, String, usize)> {
     let mut lines: Vec<(usize, String, usize)> = std::io::BufReader::new(
         std::fs::File::open(sentence_path).expect("Could not open input file"),
@@ -261,7 +261,7 @@ fn get_sentence_scores(
 fn word_frequency(
     sentence_path: &str,
     lang: &str,
-    tokenizer: &mut Tokenizer,
+    tokenizer: &mut dyn Tokenizer,
 ) -> BTreeMap<String, usize> {
     let lines = std::io::BufReader::new(
         std::fs::File::open(sentence_path).expect("Could not open input file"),
@@ -276,8 +276,8 @@ fn word_frequency(
         if cells.get(1) == Some(&lang) {
             if let Some(sentence) = cells.get(2) {
                 for word in filtered_words(tokenizer.tokenize(sentence).into_iter()) {
-                    let count = seen.get(&word).unwrap_or(&0);
-                    seen.insert(word, *count + 1);
+                    let count: usize = *seen.get(&word).unwrap_or(&0);
+                    seen.insert(word, count + 1);
                 }
             }
         }
